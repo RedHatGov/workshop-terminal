@@ -100,11 +100,15 @@ var jupyterhub_route = process.env.JUPYTERHUB_ROUTE
 
 var oauth_service_account = process.env.OAUTH_SERVICE_ACCOUNT;
 
-// The third authentication method using OAuth is behind Keycloak
+// The third authentication method is using OAuth with Keycloak.
+// This assumes that OpenShift has been configured as an identity provider
+// in the provided realm, and that public access is enabled in the provided
+// client.
 
 var keycloak_client_id = process.env.KEYCLOAK_CLIENT_ID;
 var keycloak_auth_url = process.env.KEYCLOAK_AUTH_URL;
 var keycloak_realm_name = process.env.KEYCLOAK_REALM_NAME;
+var oauth_scope = process.env.OAUTH_SCOPE || "user:info";
 
 // These functions provide details on the project the deployment is,
 // the service account name and the service token. These are only used
@@ -288,12 +292,12 @@ async function verify_openshift_user(server, access_token) {
     logger.info('User forbidden access', {name:name});
 }
 
-async function verify_keycloak_user(server, access_token) {
-    var users = await get_openshift_admin_users(server);
+async function verify_keycloak_user(openshiftServer, access_token) {
+    var users = await get_openshift_admin_users(openshiftServer);
 
     logger.info('OpenShift admin users', {users:users});
 
-    var name = await get_keycloak_user_details(server, access_token);
+    var name = await get_keycloak_user_details(keycloak_auth_url, access_token);
 
     logger.info('OpenShift user name', {name:name});
 
@@ -350,7 +354,7 @@ function register_oauth_callback(oauth2, verify_user, same_origin) {
 
             var options = {
                 redirect_uri: redirect_uri,
-                scope: 'user:info',
+                scope: oauth_scope,
                 code: code
             };
 
@@ -374,7 +378,7 @@ function register_oauth_callback(oauth2, verify_user, same_origin) {
 
             logger.info('User access granted', {name:req.session.user});
 
-            return res.redirect(next_url);
+            return res.redirect(process.env.DEFAULT_ROUTE || next_url);
         } catch(err) {
             console.error('Error', err.message);
             return res.status(500).json('Authentication failed');
@@ -414,7 +418,7 @@ function register_oauth_handshake(oauth2, same_origin) {
 
         const authorization_uri = oauth2.authorizationCode.authorizeURL({
             redirect_uri: redirect_uri,
-            scope: 'user:info',
+            scope: oauth_scope,
             state: state
         });
 
@@ -495,11 +499,11 @@ async function install_openshift_auth() {
 }
 
 async function install_keycloak_auth() {
-    var server = keycloak_auth_url;
+    var openshiftServer = `https://${kubernetes_service_host}:${kubernetes_service_port}`;
 
     var client_id = keycloak_client_id;
 
-    var metadata = await get_oauth_metadata(server, `/realms/${keycloak_realm_name}/.well-known/uma2-configuration`);
+    var metadata = await get_oauth_metadata(keycloak_auth_url, `/realms/${keycloak_realm_name}/.well-known/uma2-configuration`);
 
     logger.info('OAuth server metadata', {metadata:metadata});
 
@@ -512,7 +516,7 @@ async function install_keycloak_auth() {
     var same_origin = false;
 
     register_oauth_callback(oauth2, function(access_token) {
-        return verify_keycloak_user(server, access_token); }, same_origin);
+        return verify_keycloak_user(openshiftServer, access_token); }, same_origin);
     register_oauth_handshake(oauth2, same_origin);
 }
 
