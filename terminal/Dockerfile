@@ -10,7 +10,7 @@ RUN HOME=/root && \
     yum install -y centos-release-scl epel-release && \
     yum -y --setopt=tsflags=nodocs install --enablerepo=centosplus $INSTALL_PKGS && \
     yum -y clean all --enablerepo='*' && \
-    pip install --no-cache-dir supervisor==4.0.4 mercurial==5.0.2
+    pip install --no-cache-dir supervisor==4.2.0 mercurial==5.4.2
 
 # Install Python.
 
@@ -35,76 +35,36 @@ RUN HOME=/root && \
     rpm -V $INSTALL_PKGS && \
     yum -y clean all --enablerepo='*'
 
-RUN HOME=/root && \
-    (curl -s -0 http://www.us.apache.org/dist/maven/maven-3/3.6.2/binaries/apache-maven-3.6.2-bin.tar.gz | \
-    tar -zx -C /usr/local) && \
-    mv /usr/local/apache-maven-3.6.2 /usr/local/maven && \
+RUN HOME=/root VERSION=3.6.3 && \
+    MAJOR=$(echo $VERSION | cut -d. -f1) && \
+    curl -sL -0 http://www.us.apache.org/dist/maven/maven-$MAJOR/$VERSION/binaries/apache-maven-$VERSION-bin.tar.gz -o /tmp/apache-maven-$VERSION-bin.tar.gz && \
+    tar -zxf /tmp/apache-maven-$VERSION-bin.tar.gz -C /usr/local && \
+    rm /tmp/apache-maven-$VERSION-bin.tar.gz && \
+    mv /usr/local/apache-maven-$VERSION /usr/local/maven && \
     ln -sf /usr/local/maven/bin/mvn /usr/local/bin/mvn
 
-RUN HOME=/root && \
-    curl -sL -0 https://services.gradle.org/distributions/gradle-5.6.2-bin.zip -o /tmp/gradle-5.6.2-bin.zip && \
-    unzip /tmp/gradle-5.6.2-bin.zip -d /usr/local/ && \
-    rm /tmp/gradle-5.6.2-bin.zip && \
-    mv /usr/local/gradle-5.6.2 /usr/local/gradle && \
+RUN HOME=/root VERSION=5.6.4 && \
+    curl -sL -0 https://services.gradle.org/distributions/gradle-$VERSION-bin.zip -o /tmp/gradle-$VERSION-bin.zip && \
+    unzip /tmp/gradle-$VERSION-bin.zip -d /usr/local/ && \
+    rm /tmp/gradle-$VERSION-bin.zip && \
+    mv /usr/local/gradle-$VERSION /usr/local/gradle && \
     ln -sf /usr/local/gradle/bin/gradle /usr/local/bin/gradle
 
 # Install OpenShift clients.
 
-RUN curl -s -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v3/clients/3.10.176/linux/oc.tar.gz && \
-    tar -C /usr/local/bin -zxf /tmp/oc.tar.gz oc && \
-    mv /usr/local/bin/oc /usr/local/bin/oc-3.10 && \
-    rm /tmp/oc.tar.gz && \
-    curl -s -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v3/clients/3.11.153/linux/oc.tar.gz && \
-    tar -C /usr/local/bin -zxf /tmp/oc.tar.gz oc && \
-    mv /usr/local/bin/oc /usr/local/bin/oc-3.11 && \
-    rm /tmp/oc.tar.gz && \
-    curl -s -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v3/clients/4.0.22/linux/oc.tar.gz && \
-    tar -C /usr/local/bin -zxf /tmp/oc.tar.gz oc && \
-    mv /usr/local/bin/oc /usr/local/bin/oc-4.0 && \
-    rm /tmp/oc.tar.gz && \
-    curl -s -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/oc/4.1/linux/oc.tar.gz && \
-    tar -C /usr/local/bin -zxf /tmp/oc.tar.gz oc && \
-    mv /usr/local/bin/oc /usr/local/bin/oc-4.1 && \
-    ln -s /usr/local/bin/oc-4.1 /usr/local/bin/kubectl-1.13 && \
-    rm /tmp/oc.tar.gz && \
-    curl -s -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/oc/4.2/linux/oc.tar.gz && \
-    tar -C /usr/local/bin -zxf /tmp/oc.tar.gz oc && \
-    mv /usr/local/bin/oc /usr/local/bin/oc-4.2 && \
-    ln -s /usr/local/bin/oc-4.2 /usr/local/bin/kubectl-1.14 && \
-    rm /tmp/oc.tar.gz && \
-    curl -s -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/oc/4.3/linux/oc.tar.gz && \
-    tar -C /usr/local/bin -zxf /tmp/oc.tar.gz oc && \
-    mv /usr/local/bin/oc /usr/local/bin/oc-4.3 && \
-    ln -s /usr/local/bin/oc-4.3 /usr/local/bin/kubectl-1.16 && \
-    rm /tmp/oc.tar.gz
-
-RUN curl -sL -o /usr/local/bin/odo-0.0.16 https://github.com/openshift/odo/releases/download/v0.0.16/odo-linux-amd64 && \
-    chmod +x /usr/local/bin/odo-0.0.16 && \
-    curl -sL -o /usr/local/bin/odo-0.0.17 https://github.com/openshift/odo/releases/download/v0.0.17/odo-linux-amd64 && \
-    chmod +x /usr/local/bin/odo-0.0.17 && \
-    curl -sL -o /usr/local/bin/odo-0.0.18 https://github.com/openshift/odo/releases/download/v0.0.18/odo-linux-amd64 && \
-    chmod +x /usr/local/bin/odo-0.0.18 && \
-    curl -sL -o /usr/local/bin/odo-0.0.19 https://github.com/openshift/odo/releases/download/v0.0.19/odo-linux-amd64 && \
-    chmod +x /usr/local/bin/odo-0.0.19 && \
-    curl -sL -o /usr/local/bin/odo-0.0.20 https://github.com/openshift/odo/releases/download/v0.0.20/odo-linux-amd64 && \
-    chmod +x /usr/local/bin/odo-0.0.20 && \
-    curl -sL -o /tmp/odo.tar.gz https://mirror.openshift.com/pub/openshift-v4/clients/odo/v1.0.0/odo-linux-amd64.tar.gz && \
-    tar -C /tmp -xf /tmp/odo.tar.gz && \
-    mv /tmp/odo /usr/local/bin/odo-1.0 && \
-    chmod +x /usr/local/bin/odo-1.0 && \
-    rm /tmp/odo.tar.gz
-
-# Install Kubernetes client.
-
-RUN curl -sL -o /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.10.0/bin/linux/amd64/kubectl && \
-    mv /usr/local/bin/kubectl /usr/local/bin/kubectl-1.10 && \
-    chmod +x /usr/local/bin/kubectl-1.10 && \
-    curl -sL -o /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.11.0/bin/linux/amd64/kubectl && \
-    mv /usr/local/bin/kubectl /usr/local/bin/kubectl-1.11 && \
-    chmod +x /usr/local/bin/kubectl-1.11 && \
-    curl -sL -o /usr/local/bin/kubectl https://storage.googleapis.com/kubernetes-release/release/v1.12.0/bin/linux/amd64/kubectl && \
-    mv /usr/local/bin/kubectl /usr/local/bin/kubectl-1.12 && \
-    chmod +x /usr/local/bin/kubectl-1.12
+RUN declare -A ocp_kube_versions=( [3.11.250]=1.11 [4.3]=1.16 [4.4]=1.17 [4.5]=1.18 ) && \
+    for oc_version in "${!ocp_kube_versions[@]}"; do \
+        major_version=$(echo $oc_version | cut -d. -f1) && \
+        minor_version=$(echo $oc_version | cut -d. -f2) && \
+        { [ "$major_version" = 3 ] && dl_link="$oc_version" || dl_link="oc/$oc_version" ; } && \
+        curl -s -o /tmp/oc.tar.gz https://mirror.openshift.com/pub/openshift-v${major_version}/clients/${dl_link}/linux/oc.tar.gz && \
+        tar -C /usr/local/bin -zxf /tmp/oc.tar.gz oc && \
+        mv /usr/local/bin/oc /usr/local/bin/oc-${major_version}.${minor_version} && \
+        ln -s /usr/local/bin/oc-${major_version}.${minor_version} /usr/local/bin/kubectl-${ocp_kube_versions[$oc_version]} && \
+        rm /tmp/oc.tar.gz ; \
+    done && \
+    curl -sL -o /usr/local/bin/odo https://mirror.openshift.com/pub/openshift-v4/clients/odo/latest/odo-linux-amd64 && \
+    chmod +x /usr/local/bin/odo
 
 # Common environment variables.
 
@@ -197,9 +157,9 @@ RUN source scl_source enable rh-python36 && \
     virtualenv /opt/app-root && \
     source /opt/app-root/bin/activate && \
     pip install -U pip setuptools wheel && \
-    pip install ansible==2.8.2 openshift==0.9.0 jmespath==0.9.4 && \
+    pip install ansible==2.9.11 openshift==0.11.2 jmespath==0.10.0 && \
     ln -s /opt/workshop/bin/oc /opt/app-root/bin/oc && \
-    ln -s /opt/workshop/bin/odo /opt/app-root/bin/odo && \
+    ln -s /usr/local/bin/odo /opt/app-root/bin/odo && \
     ln -s /opt/workshop/bin/kubectl /opt/app-root/bin/kubectl && \
     chown -R 1001:0 /opt/app-root && \
     fix-permissions /opt/app-root -P
