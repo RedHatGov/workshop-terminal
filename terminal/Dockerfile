@@ -23,6 +23,8 @@ RUN HOME=/root && \
     yum -y --setopt=tsflags=nodocs install $INSTALL_PKGS && \
     yum -y clean all --enablerepo='*' && \
     pip install --no-cache-dir supervisor==4.2.0 mercurial==5.4.2 && \
+    curl -s -L -o /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 && \
+    chmod +x /usr/local/bin/jq && \
 
     # Install OpenShift clients.
     declare -A ocp_kube_versions=( [3.11.250]=1.11 [4.3]=1.16 [4.4]=1.17 [4.5]=1.18 ) && \
@@ -66,7 +68,7 @@ RUN HOME=/root && \
     cd /opt/workshop/gateway && \
     virtualenv /opt/workshop/webdav && \
     source /opt/workshop/webdav/bin/activate && \
-    pip install mod_wsgi && \
+    pip install --no-cache-dir mod_wsgi && \
 
     # Adjust permissions
     cp /opt/workshop/bin/start-singleuser.sh /opt/app-root/bin/ && \
@@ -100,13 +102,15 @@ COPY .bash_profile /opt/app-root/src/.bash_profile
 
 RUN virtualenv /opt/app-root && \
     source /opt/app-root/bin/activate && \
-    pip install -U pip setuptools wheel && \
-    pip install ansible==2.9.11 openshift==0.11.2 jmespath==0.10.0 && \
+    pip install --no-cache-dir -U pip setuptools wheel && \
+    pip install --no-cache-dir ansible==2.9.11 openshift==0.11.2 jmespath==0.10.0 && \
     ln -s /opt/workshop/bin/oc /opt/app-root/bin/oc && \
     ln -s /usr/local/bin/odo /opt/app-root/bin/odo && \
     ln -s /opt/workshop/bin/kubectl /opt/app-root/bin/kubectl && \
     chown -R 1001:0 /opt/app-root && \
-    fix-permissions /opt/app-root -P
+    fix-permissions /opt/app-root -P && \
+    yum -y clean all --enablerepo='*' && \
+    rm -rf /var/cache /var/log/dnf* /var/log/yum.*
 
 COPY profiles/. /opt/workshop/etc/profile.d/
 
