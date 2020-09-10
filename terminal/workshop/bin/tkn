@@ -1,0 +1,12 @@
+#!/bin/bash
+
+case $TKN_VERSION in
+    0.11.0|0.11.*)
+        TKN_VERSION=0.11.0
+        ;;
+    *)
+        TKN_VERSION=0.11.0
+        ;;
+esac
+
+exec /usr/local/bin/tkn-$TKN_VERSION "$@"

@@ -1,58 +1,33 @@
-FROM centos/s2i-base-centos7:latest
+FROM registry.access.redhat.com/ubi8/python-36:latest
 
 USER root
 
-# Install additional common utilities.
+# Common environment variables.
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    LANG=en_US.UTF-8 \
+    PIP_NO_CACHE_DIR=off \
+    BASH_ENV=/opt/workshop/etc/profile \
+    ENV=/opt/workshop/etc/profile \
+    PROMPT_COMMAND=". /opt/workshop/etc/profile" \
+    BUILDAH_ISOLATION=chroot \
+    _BUILDAH_STARTED_IN_USERNS=""
 
+COPY workshop /opt/workshop
+COPY s2i/. /usr/libexec/s2i/
+
+    # Install additional common utilities.
 RUN HOME=/root && \
-    INSTALL_PKGS="nano python-devel python-pip bash-completion \
-        bash-completion-extras cadaver jq tmux sudo buildah podman" && \
-    yum install -y centos-release-scl epel-release && \
-    yum -y --setopt=tsflags=nodocs install --enablerepo=centosplus $INSTALL_PKGS && \
+    INSTALL_PKGS="sudo java-1.8.0-openjdk-devel maven" && \
+    yum -y --setopt=tsflags=nodocs install $INSTALL_PKGS && \
     yum -y clean all --enablerepo='*' && \
-    pip install --no-cache-dir supervisor==4.2.0 mercurial==5.4.2
+    pip install --no-cache-dir supervisor==4.2.0 mercurial==5.4.2 && \
+    curl -s -L -o /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 && \
+    chmod +x /usr/local/bin/jq && \
 
-# Install Python.
-
-RUN HOME=/root && \
-    INSTALL_PKGS="rh-python36 rh-python36-python-devel \
-        rh-python36-python-setuptools rh-python36-python-pip \
-        httpd24 httpd24-httpd-devel httpd24-mod_ssl httpd24-mod_auth_kerb \
-        httpd24-mod_ldap httpd24-mod_session atlas-devel gcc-gfortran \
-        libffi-devel libtool-ltdl" && \
-    yum install -y centos-release-scl && \
-    yum install -y --setopt=tsflags=nodocs --enablerepo=centosplus $INSTALL_PKGS && \
-    rpm -V $INSTALL_PKGS && \
-    # Remove centos-logos (httpd dependency) to keep image size smaller.
-    rpm -e --nodeps centos-logos && \
-    yum -y clean all --enablerepo='*'
-
-# Install Java JDK, Maven and Gradle.
-
-RUN HOME=/root && \
-    INSTALL_PKGS="bc java-1.8.0-openjdk java-1.8.0-openjdk-devel" && \
-    yum install -y --setopt=tsflags=nodocs --enablerepo=centosplus $INSTALL_PKGS && \
-    rpm -V $INSTALL_PKGS && \
-    yum -y clean all --enablerepo='*'
-
-RUN HOME=/root VERSION=3.6.3 && \
-    MAJOR=$(echo $VERSION | cut -d. -f1) && \
-    curl -sL -0 http://www.us.apache.org/dist/maven/maven-$MAJOR/$VERSION/binaries/apache-maven-$VERSION-bin.tar.gz -o /tmp/apache-maven-$VERSION-bin.tar.gz && \
-    tar -zxf /tmp/apache-maven-$VERSION-bin.tar.gz -C /usr/local && \
-    rm /tmp/apache-maven-$VERSION-bin.tar.gz && \
-    mv /usr/local/apache-maven-$VERSION /usr/local/maven && \
-    ln -sf /usr/local/maven/bin/mvn /usr/local/bin/mvn
-
-RUN HOME=/root VERSION=5.6.4 && \
-    curl -sL -0 https://services.gradle.org/distributions/gradle-$VERSION-bin.zip -o /tmp/gradle-$VERSION-bin.zip && \
-    unzip /tmp/gradle-$VERSION-bin.zip -d /usr/local/ && \
-    rm /tmp/gradle-$VERSION-bin.zip && \
-    mv /usr/local/gradle-$VERSION /usr/local/gradle && \
-    ln -sf /usr/local/gradle/bin/gradle /usr/local/bin/gradle
-
-# Install OpenShift clients.
-
-RUN declare -A ocp_kube_versions=( [3.11.250]=1.11 [4.3]=1.16 [4.4]=1.17 [4.5]=1.18 ) && \
+    # Install OpenShift clients.
+    declare -A ocp_kube_versions=( [3.11.250]=1.11 [4.3]=1.16 [4.4]=1.17 [4.5]=1.18 ) && \
     for oc_version in "${!ocp_kube_versions[@]}"; do \
         major_version=$(echo $oc_version | cut -d. -f1) && \
         minor_version=$(echo $oc_version | cut -d. -f2) && \
@@ -64,85 +39,57 @@ RUN declare -A ocp_kube_versions=( [3.11.250]=1.11 [4.3]=1.16 [4.4]=1.17 [4.5]=1
         rm /tmp/oc.tar.gz ; \
     done && \
     curl -sL -o /usr/local/bin/odo https://mirror.openshift.com/pub/openshift-v4/clients/odo/latest/odo-linux-amd64 && \
-    chmod +x /usr/local/bin/odo
+    chmod +x /usr/local/bin/odo && \
 
-# Common environment variables.
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONIOENCODING=UTF-8 \
-    LC_ALL=en_US.UTF-8 \
-    LANG=en_US.UTF-8 \
-    PIP_NO_CACHE_DIR=off
-
-# Install Butterfly using system Python 2.7.
-
-COPY butterfly /opt/workshop/butterfly
-
-RUN HOME=/opt/workshop/butterfly && \
+    # Install Butterfly
+    HOME=/opt/workshop/butterfly && \
     cd /opt/workshop/butterfly && \
-    curl -s -o /tmp/get-pip.py https://bootstrap.pypa.io/get-pip.py && \
-    /usr/bin/python /tmp/get-pip.py --user && \
-    rm -f /tmp/get-pip.py && \
-    $HOME/.local/bin/pip install --no-cache-dir --user virtualenv && \
-    $HOME/.local/bin/virtualenv /opt/workshop/butterfly && \
+    pip install --no-cache-dir virtualenv && \
+    virtualenv /opt/workshop/butterfly && \
     source /opt/workshop/butterfly/bin/activate && \
     pip install --no-cache-dir -r requirements.txt && \
     /opt/workshop/butterfly/install-fonts.sh && \
     /opt/workshop/butterfly/fixup-styles.sh && \
-    rm /opt/app-root/etc/scl_enable
+    rm /opt/app-root/etc/scl_enable && \
 
-# Install gateway application using SCL Node.js 10.
-
-COPY gateway /opt/workshop/gateway
-
-RUN HOME=/opt/workshop/gateway && \
+    # Install gateway application using SCL Node.js 12.
+    HOME=/opt/workshop/gateway && \
     cd /opt/workshop/gateway && \
-    source scl_source enable rh-nodejs10 && \
+    yum module reset -y nodejs && \
+    yum module install -y nodejs:12 && \
     npm install --production && \
     chown -R 1001:0 /opt/workshop/gateway/node_modules && \
-    fix-permissions /opt/workshop/gateway/node_modules
+    fix-permissions /opt/workshop/gateway/node_modules && \
 
-# Install mod_wsgi-express for starting Apache with WebDAV.
-
-RUN HOME=/opt/workshop/webdav && \
+    # Install mod_wsgi-express for starting Apache with WebDAV.
+    HOME=/opt/workshop/webdav && \
     mkdir /opt/workshop/webdav && \
     cd /opt/workshop/gateway && \
-    source scl_source enable rh-python36 && \
-    source scl_source enable httpd24 && \
     virtualenv /opt/workshop/webdav && \
     source /opt/workshop/webdav/bin/activate && \
-    pip install mod_wsgi
+    pip install --no-cache-dir mod_wsgi && \
 
-# Finish environment setup.
-
-ENV BASH_ENV=/opt/workshop/etc/profile \
-    ENV=/opt/workshop/etc/profile \
-    PROMPT_COMMAND=". /opt/workshop/etc/profile"
-
-COPY s2i/. /usr/libexec/s2i/
-
-COPY bin/. /opt/workshop/bin/
-COPY etc/. /opt/workshop/etc/
-
-COPY bin/start-singleuser.sh /opt/app-root/bin/
-
-RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
+    # Adjust permissions
+    cp /opt/workshop/bin/start-singleuser.sh /opt/app-root/bin/ && \
+    echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
     sed -i.bak -e 's/^%wheel/# %wheel/' /etc/sudoers && \
-    chmod g+w /etc/passwd
+    chmod g+w /etc/passwd && \
 
-RUN sed -i.bak -e 's/driver = "overlay"/driver = "vfs"/' \
-      /etc/containers/storage.conf
-
-RUN sed -i.bak \
-      -e "/\[registries.search\]/{N;s/registries = \[.*\]/registries = ['docker.io', 'registry.fedoraproject.org', 'quay.io', 'registry.centos.org']/}" \
-      -e "/\[registries.insecure\]/{N;s/registries = \[.*\]/registries = ['docker-registry.default.svc:5000','image-registry.openshift-image-registry.svc:5000']/}" \
-      /etc/containers/registries.conf
+    # Install and Configure buildah
+    yum -y copr enable rhcontainerbot/container-selinux && \
+    wget -P /etc/yum.repos.d https://download.opensuse.org/repositories/devel:kubic:libcontainers:stable/CentOS_8/devel:kubic:libcontainers:stable.repo && \
+    yum -y install buildah fuse-overlayfs && \
+    sed -i -e 's|^#mount_program|mount_program|g' -e '/additionalimage.*/a "/var/lib/shared",' -e 's|"overlay"|"vfs"|g' /etc/containers/storage.conf && \
+    sed -i.bak \
+        -e "/\[registries.search\]/{N;s/registries = \[.*\]/registries = ['docker.io', 'registry.fedoraproject.org', 'quay.io', 'registry.centos.org']/}" \
+        -e "/\[registries.insecure\]/{N;s/registries = \[.*\]/registries = ['docker-registry.default.svc:5000','image-registry.openshift-image-registry.svc:5000']/}" \
+        /etc/containers/registries.conf
 
 COPY containers/libpod.conf /etc/containers/
 
-# COPY containers/sudoers.d/ /etc/sudoers.d/
+COPY containers/sudoers.d/ /etc/sudoers.d/
 
-ENV BUILDAH_ISOLATION=chroot
 
 RUN mkdir -p /opt/app-root/etc/init.d && \
     mkdir -p /opt/app-root/etc/profile.d && \
@@ -153,16 +100,17 @@ RUN mkdir -p /opt/app-root/etc/init.d && \
 
 COPY .bash_profile /opt/app-root/src/.bash_profile
 
-RUN source scl_source enable rh-python36 && \
-    virtualenv /opt/app-root && \
+RUN virtualenv /opt/app-root && \
     source /opt/app-root/bin/activate && \
-    pip install -U pip setuptools wheel && \
-    pip install ansible==2.9.11 openshift==0.11.2 jmespath==0.10.0 && \
+    pip install --no-cache-dir -U pip setuptools wheel && \
+    pip install --no-cache-dir ansible==2.9.11 openshift==0.11.2 jmespath==0.10.0 && \
     ln -s /opt/workshop/bin/oc /opt/app-root/bin/oc && \
     ln -s /usr/local/bin/odo /opt/app-root/bin/odo && \
     ln -s /opt/workshop/bin/kubectl /opt/app-root/bin/kubectl && \
     chown -R 1001:0 /opt/app-root && \
-    fix-permissions /opt/app-root -P
+    fix-permissions /opt/app-root -P && \
+    yum -y clean all --enablerepo='*' && \
+    rm -rf /var/cache /var/log/dnf* /var/log/yum.*
 
 COPY profiles/. /opt/workshop/etc/profile.d/
 

@@ -80,7 +80,7 @@ async function install_basic_auth() {
     }));
 }
 
-// For OAuth, two types of authentication methods are supported. The
+// For OAuth, three types of authentication methods are supported. The
 // first is where the terminal is behind JupyterHub. In this case
 // JupyterHub handles primary authentication of the user using whatever
 // method it chooses to use. In this case the terminal still needs to do
@@ -99,6 +99,16 @@ var jupyterhub_route = process.env.JUPYTERHUB_ROUTE
 // is setup by the following environment variables.
 
 var oauth_service_account = process.env.OAUTH_SERVICE_ACCOUNT;
+
+// The third authentication method is using OAuth with Keycloak.
+// This assumes that OpenShift has been configured as an identity provider
+// in the provided realm, and that public access is enabled in the provided
+// client.
+
+var keycloak_client_id = process.env.KEYCLOAK_CLIENT_ID;
+var keycloak_auth_url = process.env.KEYCLOAK_AUTH_URL;
+var keycloak_realm_name = process.env.KEYCLOAK_REALM_NAME;
+var oauth_scope = process.env.OAUTH_SCOPE || "user:info";
 
 // These functions provide details on the project the deployment is,
 // the service account name and the service token. These are only used
@@ -131,14 +141,12 @@ function service_account_token() {
 // need to fake up this data later. We can use this for the case when
 // using OpenShift OAuth.
 
-async function get_oauth_metadata(server) {
+async function get_oauth_metadata(server, url) {
     const options = {
         baseURL: server,
         httpsAgent: new https.Agent({ rejectUnauthorized: false }),
         responseType: 'json'
     };
-
-    const url = '/.well-known/oauth-authorization-server';
 
     return (await axios.get(url, options)).data;
 }
@@ -220,6 +228,22 @@ async function get_openshift_user_details(server, access_token) {
     return name;
 }
 
+async function get_keycloak_user_details(server, access_token) {
+    const options = {
+        baseURL: server,
+        httpsAgent: new https.Agent({ rejectUnauthorized: false }),
+        headers: { 'Authorization': 'Bearer ' + access_token },
+        responseType: 'json'
+    };
+
+    const url = `/realms/${keycloak_realm_name}/protocol/openid-connect/userinfo`;
+
+    var details = (await axios.get(url, options)).data;
+    var name = details['preferred_username'];
+
+    return name;
+}
+
 async function get_openshift_admin_users(server) {
     const namespace = project_name();
     const token = service_account_token();
@@ -259,6 +283,21 @@ async function verify_openshift_user(server, access_token) {
     logger.info('OpenShift admin users', {users:users});
 
     var name = await get_openshift_user_details(server, access_token);
+
+    logger.info('OpenShift user name', {name:name});
+
+    if (users.includes(name))
+        return name;
+
+    logger.info('User forbidden access', {name:name});
+}
+
+async function verify_keycloak_user(openshiftServer, access_token) {
+    var users = await get_openshift_admin_users(openshiftServer);
+
+    logger.info('OpenShift admin users', {users:users});
+
+    var name = await get_keycloak_user_details(keycloak_auth_url, access_token);
 
     logger.info('OpenShift user name', {name:name});
 
@@ -315,7 +354,7 @@ function register_oauth_callback(oauth2, verify_user, same_origin) {
 
             var options = {
                 redirect_uri: redirect_uri,
-                scope: 'user:info',
+                scope: oauth_scope,
                 code: code
             };
 
@@ -339,7 +378,7 @@ function register_oauth_callback(oauth2, verify_user, same_origin) {
 
             logger.info('User access granted', {name:req.session.user});
 
-            return res.redirect(next_url);
+            return res.redirect(process.env.DEFAULT_ROUTE || next_url);
         } catch(err) {
             console.error('Error', err.message);
             return res.status(500).json('Authentication failed');
@@ -379,7 +418,7 @@ function register_oauth_handshake(oauth2, same_origin) {
 
         const authorization_uri = oauth2.authorizationCode.authorizeURL({
             redirect_uri: redirect_uri,
-            scope: 'user:info',
+            scope: oauth_scope,
             state: state
         });
 
@@ -441,7 +480,7 @@ async function install_openshift_auth() {
     var client_id = service_account_name(oauth_service_account);
     var client_secret = service_account_token();
 
-    var metadata = await get_oauth_metadata(server);
+    var metadata = await get_oauth_metadata(server, '/.well-known/oauth-authorization-server');
 
     logger.info('OAuth server metadata', {metadata:metadata});
 
@@ -459,6 +498,28 @@ async function install_openshift_auth() {
     register_oauth_handshake(oauth2, same_origin);
 }
 
+async function install_keycloak_auth() {
+    var openshiftServer = `https://${kubernetes_service_host}:${kubernetes_service_port}`;
+
+    var client_id = keycloak_client_id;
+
+    var metadata = await get_oauth_metadata(keycloak_auth_url, `/realms/${keycloak_realm_name}/.well-known/uma2-configuration`);
+
+    logger.info('OAuth server metadata', {metadata:metadata});
+
+    var credentials = setup_oauth_credentials(metadata, client_id, '');
+
+    logger.info('OAuth server credentials', {credentials:credentials});
+
+    var oauth2 = require('simple-oauth2').create(credentials);
+
+    var same_origin = false;
+
+    register_oauth_callback(oauth2, function(access_token) {
+        return verify_keycloak_user(openshiftServer, access_token); }, same_origin);
+    register_oauth_handshake(oauth2, same_origin);
+}
+
 async function setup_access() {
     if (jupyterhub_client_id) {
         logger.info('Install JupyterHub auth support');
@@ -472,6 +533,10 @@ async function setup_access() {
         else {
             logger.info('All authentication has been disabled');
         }
+    }
+    else if (keycloak_client_id) {
+        logger.info('Install Keycloak auth support');
+        await install_keycloak_auth();
     }
     else if (oauth_service_account) {
         logger.info('Install OpenShift auth support');
