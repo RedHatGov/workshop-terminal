@@ -25,6 +25,8 @@ RUN HOME=/root && \
     pip install --no-cache-dir supervisor==4.2.0 mercurial==5.4.2 && \
     curl -s -L -o /usr/local/bin/jq https://github.com/stedolan/jq/releases/download/jq-1.6/jq-linux64 && \
     chmod +x /usr/local/bin/jq && \
+    curl -sLo /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/3.3.4/yq_linux_amd64 && \
+    chmod +x /usr/local/bin/yq && \
 
     # Install OpenShift clients.
     declare -A ocp_kube_versions=( [3.11.250]=1.11 [4.3]=1.16 [4.4]=1.17 [4.5]=1.18 ) && \
