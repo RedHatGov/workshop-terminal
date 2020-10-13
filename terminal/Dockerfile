@@ -19,7 +19,7 @@ COPY s2i/. /usr/libexec/s2i/
 
     # Install additional common utilities.
 RUN HOME=/root && \
-    INSTALL_PKGS="sudo java-1.8.0-openjdk-devel maven" && \
+    INSTALL_PKGS="sudo java-1.8.0-openjdk-devel maven skopep" && \
     yum -y --setopt=tsflags=nodocs install $INSTALL_PKGS && \
     yum -y clean all --enablerepo='*' && \
     pip install --no-cache-dir supervisor==4.2.0 mercurial==5.4.2 && \
