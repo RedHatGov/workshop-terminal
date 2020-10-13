@@ -19,7 +19,7 @@ COPY s2i/. /usr/libexec/s2i/
 
     # Install additional common utilities.
 RUN HOME=/root && \
-    INSTALL_PKGS="sudo java-1.8.0-openjdk-devel maven skopeo" && \
+    INSTALL_PKGS="sudo java-1.8.0-openjdk-devel maven" && \
     yum -y --setopt=tsflags=nodocs install $INSTALL_PKGS && \
     yum -y clean all --enablerepo='*' && \
     pip install --no-cache-dir supervisor==4.2.0 mercurial==5.4.2 && \
@@ -87,7 +87,10 @@ RUN HOME=/root && \
     sed -i.bak \
         -e "/\[registries.search\]/{N;s/registries = \[.*\]/registries = ['docker.io', 'registry.fedoraproject.org', 'quay.io', 'registry.centos.org']/}" \
         -e "/\[registries.insecure\]/{N;s/registries = \[.*\]/registries = ['docker-registry.default.svc:5000','image-registry.openshift-image-registry.svc:5000']/}" \
-        /etc/containers/registries.conf
+        /etc/containers/registries.conf && \
+
+    # Install skopeo
+    yum install --setopt=tsflags=nodocs -y skopeo 
 
 COPY containers/libpod.conf /etc/containers/
 
