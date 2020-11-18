@@ -105,6 +105,7 @@ RUN mkdir -p /opt/app-root/etc/init.d && \
     fix-permissions /opt/app-root
 
 COPY .bash_profile /opt/app-root/src/.bash_profile
+COPY .bashrc /opt/app-root/src/.bashrc
 
 RUN virtualenv /opt/app-root && \
     source /opt/app-root/bin/activate && \
